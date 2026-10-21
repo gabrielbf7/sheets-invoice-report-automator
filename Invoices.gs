@@ -16,36 +16,35 @@ const ORDER_COLS = {
 };
 
 /**
- * Menu action: generate one invoice per client with pending orders.
- * Current step: logs pending orders, fills the template for the first client
- * and exports it as a PDF.
+ * Menu action: generate one PDF invoice per client with pending orders,
+ * save it to the Invoices folder and mark the orders as invoiced.
  */
 function generateInvoices() {
+  const ss = SpreadsheetApp.getActive();
   const groups = getPendingOrdersByClient_();
   const clients = Object.keys(groups);
-  let totalOrders = 0;
-
-  clients.forEach(client => {
-    const orders = groups[client];
-    totalOrders += orders.length;
-    Logger.log(client + ': ' + orders.length + ' order(s) — ' +
-      orders.map(o => o.orderId).join(', '));
-  });
-  Logger.log('Clients: ' + clients.length + ' | Pending orders: ' + totalOrders);
 
   if (clients.length === 0) {
-    SpreadsheetApp.getActive().toast('No pending orders', 'Generate invoices');
+    ss.toast('No pending orders', 'Generate invoices');
     return;
   }
 
-  // Step 2: fill the template for the first client only (visual check)
-  const firstClient = clients[0];
-  const invoiceNo = getNextInvoiceNumber_();
-  fillInvoiceTemplate_(firstClient, groups[firstClient], invoiceNo);
+  let nextNumber = getNextInvoiceNumber_();
 
-  // Step 3: export the filled template as PDF to the Invoices folder
-  const pdf = exportInvoicePdf_(invoiceNo, firstClient);
-  Logger.log('PDF saved: ' + pdf.getName() + ' → ' + pdf.getUrl());
+  clients.forEach(client => {
+    const orders = groups[client];
+    const invoiceNo = formatInvoiceNumber_(nextNumber++);
+
+    fillInvoiceTemplate_(client, orders, invoiceNo);
+    const pdf = exportInvoicePdf_(invoiceNo, client);
+    markOrdersInvoiced_(orders, invoiceNo, pdf.getUrl());
+
+    Logger.log(invoiceNo + ' — ' + client + ' (' + orders.length + ' order(s))');
+    Utilities.sleep(2000); // pause between exports to avoid rate limits
+  });
+
+  Logger.log('Invoices generated: ' + clients.length);
+  ss.toast(clients.length + ' invoice(s) generated', 'Generate invoices');
 }
 
 /**
@@ -78,7 +77,7 @@ function getPendingOrdersByClient_() {
 }
 
 /**
- * Returns the next invoice number (highest existing INV-#### in Orders + 1).
+ * Returns the next invoice number as an integer (highest existing INV-#### + 1).
  */
 function getNextInvoiceNumber_() {
   const sheet = SpreadsheetApp.getActive().getSheetByName(ORDERS_SHEET_NAME);
@@ -88,7 +87,14 @@ function getNextInvoiceNumber_() {
     const match = String(data[i][ORDER_COLS.INVOICE_NO]).match(/^INV-(\d+)$/);
     if (match) max = Math.max(max, Number(match[1]));
   }
-  return 'INV-' + String(max + 1).padStart(4, '0');
+  return max + 1;
+}
+
+/**
+ * Formats an integer as an invoice number, e.g. 135 → "INV-0135".
+ */
+function formatInvoiceNumber_(n) {
+  return 'INV-' + String(n).padStart(4, '0');
 }
 
 /**
@@ -141,6 +147,7 @@ function getInvoicesFolder_() {
 
 /**
  * Exports only the Invoice Template sheet as a PDF and saves it to the Invoices folder.
+ * Retries with increasing waits if Google returns 429 (too many requests).
  */
 function exportInvoicePdf_(invoiceNo, clientName) {
   const ss = SpreadsheetApp.getActive();
@@ -152,11 +159,41 @@ function exportInvoicePdf_(invoiceNo, clientName) {
     '&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED' +
     '&top_margin=0.5&bottom_margin=0.5&left_margin=0.5&right_margin=0.5';
 
-  const response = UrlFetchApp.fetch(url, {
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }
-  });
+  const maxAttempts = 5;
+  let waitMs = 5000;
 
-  const fileName = invoiceNo + ' - ' + clientName + '.pdf';
-  const blob = response.getBlob().setName(fileName);
-  return getInvoicesFolder_().createFile(blob);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = UrlFetchApp.fetch(url, {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true // handle errors ourselves instead of crashing
+    });
+    const code = response.getResponseCode();
+
+    if (code === 200) {
+      const fileName = invoiceNo + ' - ' + clientName + '.pdf';
+      const blob = response.getBlob().setName(fileName);
+      return getInvoicesFolder_().createFile(blob);
+    }
+
+    if (code === 429 && attempt < maxAttempts) {
+      Logger.log('Rate limited on ' + invoiceNo + ', retrying in ' + waitMs / 1000 + 's');
+      Utilities.sleep(waitMs);
+      waitMs *= 2; // 5s, 10s, 20s, 40s
+      continue;
+    }
+
+    throw new Error('PDF export failed for ' + invoiceNo + ' (HTTP ' + code + ')');
+  }
+}
+
+/**
+ * Sets Status = invoiced, Invoice No and Invoice Link for each order row.
+ */
+function markOrdersInvoiced_(orders, invoiceNo, pdfUrl) {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(ORDERS_SHEET_NAME);
+  orders.forEach(o => {
+    // Columns I:K (Status, Invoice No, Invoice Link) = sheet columns 9..11
+    sheet.getRange(o.rowNumber, ORDER_COLS.STATUS + 1, 1, 3)
+      .setValues([['invoiced', invoiceNo, pdfUrl]]);
+  });
 }
