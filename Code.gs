@@ -9,13 +9,6 @@ function onOpen() {
     .addToUi();
 }
 
-/**
- * Generates one PDF invoice per client with pending orders.
- * TODO: implement.
- */
-function generateInvoices() {
-  SpreadsheetApp.getActive().toast('Generate invoices: coming soon.', 'Automations');
-}
 
 /**
  * Emails the weekly sales summary to the spreadsheet owner.
