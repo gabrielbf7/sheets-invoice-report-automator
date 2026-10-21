@@ -3,6 +3,10 @@
  */
 
 const ORDERS_SHEET_NAME = 'Orders';
+const CLIENTS_SHEET_NAME = 'Clients';
+const TEMPLATE_SHEET_NAME = 'Invoice Template';
+const INVOICE_DUE_DAYS = 30;   // payment terms: Net 30
+const INVOICE_MAX_ITEMS = 10;  // template rows B13:E22
 
 // Zero-based column indexes in the Orders sheet
 const ORDER_COLS = {
@@ -12,7 +16,7 @@ const ORDER_COLS = {
 
 /**
  * Menu action: generate one invoice per client with pending orders.
- * Step 1: only reads and logs pending orders grouped by client.
+ * Current step: logs pending orders and fills the template for the first client.
  */
 function generateInvoices() {
   const groups = getPendingOrdersByClient_();
@@ -25,10 +29,18 @@ function generateInvoices() {
     Logger.log(client + ': ' + orders.length + ' order(s) — ' +
       orders.map(o => o.orderId).join(', '));
   });
-
   Logger.log('Clients: ' + clients.length + ' | Pending orders: ' + totalOrders);
-  SpreadsheetApp.getActive().toast(
-    clients.length + ' client(s) with pending orders', 'Generate invoices');
+
+  if (clients.length === 0) {
+    SpreadsheetApp.getActive().toast('No pending orders', 'Generate invoices');
+    return;
+  }
+
+  // Step 2: fill the template for the first client only (visual check)
+  const firstClient = clients[0];
+  const invoiceNo = getNextInvoiceNumber_();
+  fillInvoiceTemplate_(firstClient, groups[firstClient], invoiceNo);
+  Logger.log('Template filled for ' + firstClient + ' (' + invoiceNo + ')');
 }
 
 /**
@@ -58,4 +70,53 @@ function getPendingOrdersByClient_() {
     });
   }
   return groups;
+}
+
+/**
+ * Returns the next invoice number (highest existing INV-#### in Orders + 1).
+ */
+function getNextInvoiceNumber_() {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(ORDERS_SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  let max = 0;
+  for (let i = 1; i < data.length; i++) {
+    const match = String(data[i][ORDER_COLS.INVOICE_NO]).match(/^INV-(\d+)$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return 'INV-' + String(max + 1).padStart(4, '0');
+}
+
+/**
+ * Looks up a client in the Clients sheet (Client | Email | Company | Address | City).
+ */
+function getClientInfo_(clientName) {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(CLIENTS_SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === clientName) {
+      return { client: data[i][0], company: data[i][2], address: data[i][3], city: data[i][4] };
+    }
+  }
+  return { client: clientName, company: '', address: '', city: '' }; // fallback
+}
+
+/**
+ * Writes invoice header, bill-to and line items into the Invoice Template sheet.
+ */
+function fillInvoiceTemplate_(clientName, orders, invoiceNo) {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(TEMPLATE_SHEET_NAME);
+  const info = getClientInfo_(clientName);
+  const today = new Date();
+  const due = new Date(today.getTime() + INVOICE_DUE_DAYS * 24 * 60 * 60 * 1000);
+
+  sheet.getRange('E3').setValue(invoiceNo);
+  sheet.getRange('E4:E5').setValues([[today], [due]]).setNumberFormat('yyyy-mm-dd');
+  sheet.getRange('B7:B10').setValues([[info.client], [info.company], [info.address], [info.city]]);
+
+  sheet.getRange('B13:E22').clearContent(); // clear previous items
+  const rows = orders.slice(0, INVOICE_MAX_ITEMS)
+    .map(o => [o.item, o.qty, o.unitPrice, o.total]);
+  sheet.getRange(13, 2, rows.length, 4).setValues(rows); // starts at B13
+
+  SpreadsheetApp.flush(); // make sure changes are written before export (next step)
 }
