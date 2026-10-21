@@ -4,7 +4,7 @@ Google Sheets + Apps Script automation that turns a simple order sheet into PDF 
 
 **Problem it solves:** small businesses often track orders in a spreadsheet and build invoices and reports by hand. This tool does it from a custom menu: one click generates one PDF invoice per client, saves it to Drive, and marks the orders as invoiced.
 
-> **Demo sheet:** [make a copy](DEMO_SHEET_LINK) (all data is fictional: 50 clients, 200 orders, emails on `example.com`).
+> **Demo sheet:** [make a copy](https://docs.google.com/spreadsheets/d/1KCuHFT8yuThRFFD3pcZJ5oPdTvyj76O7GvYCv47zDbY/copy) (all data is fictional: 50 clients, 200 orders, emails on `example.com`).
 
 ## Features
 
@@ -91,7 +91,7 @@ Columns are found by header name, not by position, so the column order in `Order
 
 **Option 1: copy the demo sheet (easiest)**
 
-1. Open the [demo sheet](DEMO_SHEET_LINK) and choose **File → Make a copy**. The script is copied with the sheet.
+1. Open the [demo sheet](https://docs.google.com/spreadsheets/d/1KCuHFT8yuThRFFD3pcZJ5oPdTvyj76O7GvYCv47zDbY/edit?usp=sharing) and choose **File → Make a copy**. The script is copied with the sheet.
 2. Open your copy and reload the page. The **Automations** menu appears next to **Help**.
 3. The first time you run a menu item, Google asks for permissions (Sheets, Drive, external requests for the PDF export, email, triggers). Because the script is not published by Google, click **Advanced → Go to project (unsafe)** to allow it.
 
