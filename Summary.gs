@@ -88,3 +88,25 @@ function getWeeklyStats_() {
     topClients: topClients,
   };
 }
+
+function enableWeeklySummary() {
+  removeSummaryTriggers_();
+  ScriptApp.newTrigger('sendWeeklySummary')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(8)
+    .create();
+  SpreadsheetApp.getActive().toast('Weekly summary enabled: every Monday, 8-9 AM.', 'Automations', 5);
+}
+
+function disableWeeklySummary() {
+  const removed = removeSummaryTriggers_();
+  SpreadsheetApp.getActive().toast(`Weekly summary disabled (${removed} trigger(s) removed).`, 'Automations', 5);
+}
+
+function removeSummaryTriggers_() {
+  const triggers = ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'sendWeeklySummary');
+  triggers.forEach(t => ScriptApp.deleteTrigger(t));
+  return triggers.length;
+}

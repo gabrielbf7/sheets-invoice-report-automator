@@ -6,6 +6,9 @@ function onOpen() {
     .createMenu('Automations')
     .addItem('Generate invoices', 'generateInvoices')
     .addItem('Send weekly summary', 'sendWeeklySummary')
+    .addSeparator()
+    .addItem('Enable weekly summary', 'enableWeeklySummary')
+    .addItem('Disable weekly summary', 'disableWeeklySummary')
     .addToUi();
 }
 
