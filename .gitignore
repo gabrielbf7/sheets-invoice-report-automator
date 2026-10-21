@@ -1,0 +1,18 @@
+# clasp credentials (if used later)
+.clasp.json
+.clasprc.json
+
+# Dependencies and secrets
+node_modules/
+.env
+
+# Generated files and spreadsheet exports
+*.pdf
+*.xlsx
+*.csv
+output/
+exports/
+
+# OS files
+.DS_Store
+Thumbs.db
