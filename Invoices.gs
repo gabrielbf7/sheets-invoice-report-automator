@@ -5,6 +5,7 @@
 const ORDERS_SHEET_NAME = 'Orders';
 const CLIENTS_SHEET_NAME = 'Clients';
 const TEMPLATE_SHEET_NAME = 'Invoice Template';
+const INVOICES_FOLDER_NAME = 'Invoices';
 const INVOICE_DUE_DAYS = 30;   // payment terms: Net 30
 const INVOICE_MAX_ITEMS = 10;  // template rows B13:E22
 
@@ -16,7 +17,8 @@ const ORDER_COLS = {
 
 /**
  * Menu action: generate one invoice per client with pending orders.
- * Current step: logs pending orders and fills the template for the first client.
+ * Current step: logs pending orders, fills the template for the first client
+ * and exports it as a PDF.
  */
 function generateInvoices() {
   const groups = getPendingOrdersByClient_();
@@ -40,7 +42,10 @@ function generateInvoices() {
   const firstClient = clients[0];
   const invoiceNo = getNextInvoiceNumber_();
   fillInvoiceTemplate_(firstClient, groups[firstClient], invoiceNo);
-  Logger.log('Template filled for ' + firstClient + ' (' + invoiceNo + ')');
+
+  // Step 3: export the filled template as PDF to the Invoices folder
+  const pdf = exportInvoicePdf_(invoiceNo, firstClient);
+  Logger.log('PDF saved: ' + pdf.getName() + ' → ' + pdf.getUrl());
 }
 
 /**
@@ -118,5 +123,40 @@ function fillInvoiceTemplate_(clientName, orders, invoiceNo) {
     .map(o => [o.item, o.qty, o.unitPrice, o.total]);
   sheet.getRange(13, 2, rows.length, 4).setValues(rows); // starts at B13
 
-  SpreadsheetApp.flush(); // make sure changes are written before export (next step)
+  SpreadsheetApp.flush(); // make sure changes are written before export
+}
+
+/**
+ * Returns the "Invoices" folder next to the spreadsheet, creating it if needed.
+ * Found by name, so no private folder IDs are stored in the code.
+ */
+function getInvoicesFolder_() {
+  const ssFile = DriveApp.getFileById(SpreadsheetApp.getActive().getId());
+  const parents = ssFile.getParents();
+  const parent = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+
+  const existing = parent.getFoldersByName(INVOICES_FOLDER_NAME);
+  return existing.hasNext() ? existing.next() : parent.createFolder(INVOICES_FOLDER_NAME);
+}
+
+/**
+ * Exports only the Invoice Template sheet as a PDF and saves it to the Invoices folder.
+ */
+function exportInvoicePdf_(invoiceNo, clientName) {
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName(TEMPLATE_SHEET_NAME);
+
+  const url = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export' +
+    '?format=pdf&gid=' + sheet.getSheetId() +
+    '&size=letter&portrait=true&fitw=true' +
+    '&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED' +
+    '&top_margin=0.5&bottom_margin=0.5&left_margin=0.5&right_margin=0.5';
+
+  const response = UrlFetchApp.fetch(url, {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }
+  });
+
+  const fileName = invoiceNo + ' - ' + clientName + '.pdf';
+  const blob = response.getBlob().setName(fileName);
+  return getInvoicesFolder_().createFile(blob);
 }
