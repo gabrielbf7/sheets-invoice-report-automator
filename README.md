@@ -63,7 +63,7 @@ Total sold, orders, invoices, and top 5 clients of the last 7 days.
 4. The next invoice number is the highest existing one + 1 (`INV-0001`, `INV-0002`, ...).
 5. **Send weekly summary** reads the orders from the last 7 days (any status) and emails the totals to the spreadsheet owner.
 
-Columns are found by header name, not by position, so the column order in `Orders` can change.
+The weekly summary finds columns by header name. Invoice generation expects the default column order in `Orders` (as created by `setupDemo()`).
 
 ## Tech Stack
 
