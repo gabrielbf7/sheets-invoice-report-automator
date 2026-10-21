@@ -9,11 +9,3 @@ function onOpen() {
     .addToUi();
 }
 
-
-/**
- * Emails the weekly sales summary to the spreadsheet owner.
- * TODO: implement.
- */
-function sendWeeklySummary() {
-  SpreadsheetApp.getActive().toast('Send weekly summary: coming soon.', 'Automations');
-}
