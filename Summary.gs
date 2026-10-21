@@ -8,7 +8,40 @@ const SUMMARY_TOP_CLIENTS = 5;
 
 function sendWeeklySummary() {
   const stats = getWeeklyStats_();
-  Logger.log(JSON.stringify(stats, null, 2));
+  const recipient = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
+  const subject = `Weekly sales summary (${stats.from} to ${stats.to})`;
+
+  MailApp.sendEmail({
+    to: recipient,
+    subject: subject,
+    htmlBody: buildSummaryHtml_(stats),
+  });
+
+  Logger.log(`Summary sent: ${subject}`);
+  SpreadsheetApp.getActive().toast('Weekly summary sent to your email.', 'Automations', 5);
+}
+
+function buildSummaryHtml_(stats) {
+  const usd = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const rows = stats.topClients.map((c, i) =>
+    `<tr><td>${i + 1}</td><td>${c.client}</td><td style="text-align:right">${usd(c.total)}</td></tr>`
+  ).join('');
+
+  return `
+    <h2>Weekly sales summary</h2>
+    <p>${stats.from} to ${stats.to}</p>
+    <ul>
+      <li><b>Total sold:</b> ${usd(stats.totalSold)}</li>
+      <li><b>Orders:</b> ${stats.orders}</li>
+      <li><b>Invoices:</b> ${stats.invoices}</li>
+    </ul>
+    <h3>Top clients</h3>
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
+      <tr><th>#</th><th>Client</th><th>Total</th></tr>
+      ${rows}
+    </table>
+    <p style="color:#888;font-size:12px">Sent automatically by Sheets Invoice &amp; Report Automator.</p>`;
 }
 
 function getWeeklyStats_() {
